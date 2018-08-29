@@ -32,6 +32,8 @@ public:
     pubCANCmd = nh.advertise<can_msgs::Frame>("/gcan/send_msgs", 10);
     pubVizPath = nh.advertise<geometry_msgs::PoseArray>("/path", 10);
     timerCmdCalc = nh.createTimer(ros::Duration(0.02), &IoniqControlNode::timerCallback, this);
+
+    //load gps path
   }
   void navPVTCallback(const ublox_msgs::NavPVT::ConstPtr &_msg)
   {
@@ -96,9 +98,13 @@ public:
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     const double k = 1;
+    //TODO: Select appropriate target point to track: Nearest point(crossroad may cause problems)
     if (pathIndex <= 1 && pathIndex < path.poses.size())
     {
-      //steerAngle = yaw - atan2(path[pathIndex-1]. - path[pathIndex]) + atan2(k*dist(path[index], currentPose.position.), currentVelocity.linear.x);
+      steerAngle = yaw 
+          - atan2(path.poses[pathIndex].position.y - path.poses[pathIndex - 1].position.y, 
+          path.poses[pathIndex].position.x - path.poses[pathIndex - 1].position.x)
+          + atan2(k*distPose(path.poses[pathIndex], currentPose.pose), currentVelocity.linear.x);
 
       can_msgs::Frame fMoConf;
       fMoConf.id = 0x156;
@@ -124,6 +130,12 @@ public:
       pubCANCmd.publish(fMoConf);
       pubCANCmd.publish(fMoVal);
     }
+  }
+  static double distPose(const geometry_msgs::Pose &_a, const geometry_msgs::Pose &_b)
+  {
+    return sqrt(pow(_a.position.x - _b.position.x, 2) 
+                + pow(_a.position.y - _b.position.y, 2) 
+                + pow(_a.position.z - _b.position.z, 2));
   }
 
   //search the nearest point with a msg from rviz
