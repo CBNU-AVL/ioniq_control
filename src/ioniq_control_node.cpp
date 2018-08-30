@@ -16,8 +16,8 @@
 class IoniqControlNode
 {
 public:
-  IoniqControlNode(ros::NodeHandle &_nh)
-    : nh(_nh),
+  IoniqControlNode(ros::NodeHandle &_nh, ros::NodeHandle &_ph)
+    : nh(_nh), ph(_ph),
       pathIndex(0),
       bEPSEnable(true),
       bEPSIgnore(true),
@@ -32,30 +32,35 @@ public:
     subUbloxPVT = nh.subscribe<ublox_msgs::NavPVT>("/m8p_rover/navpvt", 10, &IoniqControlNode::navPVTCallback, this);
     subUbloxRELPOS = nh.subscribe<ublox_msgs::NavRELPOSNED>("/m8p_rover/navrelposened", 10, &IoniqControlNode::navRELPOSCallback, this);
     subCANACC = nh.subscribe<can_msgs::Frame>("/gcan/recv_msgs", 10, &IoniqControlNode::gcanCallback, this);
-    pubCANCmd = nh.advertise<can_msgs::Frame>("/gcan/send_msgs", 10);
+    pubCANCmd = nh.advertise<can_msgs::Frame>("/gcan/sent_msgs", 10);
     pubVizPath = nh.advertise<geometry_msgs::PoseArray>("/path", 10);
     timerCmdCalc = nh.createTimer(ros::Duration(0.02), &IoniqControlNode::timerCallback, this);
-
+    
+    ROS_INFO("Initializing IoniqControlNode.");
+    ph.param("path_file_name", filePath, std::string("PATH.txt"));
+    
     //load gps path
     std::ifstream fin;
     double pathLon, pathLat, pathAlt;
     std::string input;
     bool error;
-    unsigned long long int pathCount = 0;
+    double pathCount = 0;
+    ROS_INFO("path_file_name: %s", filePath.c_str());
 
-    fin.open("PATH.txt");
-    error=false;
+    fin.open(filePath);
+    error = false;
 
     while (true)
       {
         getline(fin,input);
-        if (!fin) break; //check for eof
+        if (!fin) 
+        {
+          break; //check for eof
+        }
 
         std::istringstream buffer(input);
 
-        //check for non numerical input
-        //and less/more input than needed
-        if (!buffer || !buffer.eof())
+        if (buffer.eof())
           {
             error = true;
             pathCount = 0;
@@ -72,11 +77,15 @@ public:
         path.poses.push_back(tmpPose);
 
         //do what you want with temp1 and temp2
-        ROS_DEBUG_STREAM("[" << pathCount << "] longitude: " << pathLon << '\t' << "latitude : " << pathLat );
+        ROS_INFO_STREAM("[" << pathCount << "] longitude: " << pathLon << '\t' << "latitude : " << pathLat  << '\t' << "altitude : " << pathAlt );
       }
 
     if (error)
       ROS_ERROR("path file is corrupted...");
+    else
+    {
+      ROS_INFO("parse succeed.");
+    }
   }
 
   void navPVTCallback(const ublox_msgs::NavPVT::ConstPtr &_msg)
@@ -146,12 +155,11 @@ public:
     m.getRPY(roll, pitch, yaw);
     const double k = 1;
     //TODO: Select appropriate target point to track: Nearest point(crossroad may cause problems)
-    if (pathIndex <= 1 && pathIndex < path.poses.size())
+    if (pathIndex >= 1 && pathIndex < path.poses.size())
       {
         steerAngle = yaw
-            - atan2(path.poses[pathIndex].position.y - path.poses[pathIndex - 1].position.y,
-            path.poses[pathIndex].position.x - path.poses[pathIndex - 1].position.x)
-            + atan2(k*distPose(path.poses[pathIndex], currentPose.pose), currentVelocity.linear.x);
+            - atan2(path.poses[pathIndex].position.y - path.poses[pathIndex - 1].position.y, path.poses[pathIndex].position.x - path.poses[pathIndex - 1].position.x + DBL_MIN)
+            + atan2(k*distPose(path.poses[pathIndex], currentPose.pose), currentVelocity.linear.x + DBL_MIN);
 
         can_msgs::Frame fMoConf;
         fMoConf.id = 0x156;
@@ -213,6 +221,8 @@ private:
   uint8_t clusterDispSpeed;
   uint8_t aliveCount;
 
+  std::string filePath;
+
   ros::Timer timerCmdCalc;
   bool bActive;
 };
@@ -220,8 +230,9 @@ private:
 int main (int argc, char ** argv)
 {
   ros::init(argc, argv, "ioniq_control_node");
-  ros::NodeHandle nh;
-  IoniqControlNode ioniqControlNode(nh);
+  ros::NodeHandle nh("");
+  ros::NodeHandle ph("~");
+  IoniqControlNode ioniqControlNode(nh, ph);
   ros::spin();
   return 0;
 }

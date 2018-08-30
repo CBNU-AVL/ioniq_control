@@ -8,22 +8,26 @@
   <arg name="respawn_delay" default="30" />
   <arg name="clear_params" default="true" />
 
-  <node pkg="ublox_gps" type="ublox_gps" name="$(arg node_name)"
+  <!-- <node pkg="ublox_gps" type="ublox_gps" name="$(arg node_name)"
         output="$(arg output)" 
         clear_params="$(arg clear_params)"
         respawn="$(arg respawn)" 
         respawn_delay="$(arg respawn_delay)">
     <rosparam command="load" 
               file="$(find ioniq_control)/config/ublox/$(arg param_file_name).yaml" />
+  </node> -->
+
+  <node pkg="socketcan_bridge" type="socketcan_bridge_node" name="gcan_node" ns="gcan">
+    <param name="can_device" type="str" value="can0" />
+    <remap from="sent_messages" to="sent_msgs"/>
+    <remap from="received_messages" to="recv_msgs"/>
   </node>
+  <!-- <node pkg="socketcan_bridge" type="socketcan_bridge_node" name="ccan">
+    <param name="can_device" type="string" value="can1" />
+  </node> -->
 
-  <node pkg="socketcan_bridge" type="socketcan_bridge_node" name="gcan" />
-
-  <node pkg="ioniq_control" type="ioniq_control_node" name="ioniq_control_node">
-        <param name="can_device" type="string" value="can0" />
-        <!--<param name="can_device" type="string" value="can1" />-->
-        <!--<param name="can_device" type="string" value="vcan0" />-->
-  <node/>
-
+  <node pkg="ioniq_control" type="ioniq_control_node" name="ioniq_control_node" output="screen">
+    <param name="path_file_name" type="str" value="$(find ioniq_control)/path/PATH.txt"/>
+  </node>
 
 </launch>
