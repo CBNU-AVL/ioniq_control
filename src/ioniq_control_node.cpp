@@ -52,7 +52,6 @@ public:
         if (!fin) break; //check for eof
 
         std::istringstream buffer(input);
-        buffer >> pathCount >> pathLon >> pathLat >> pathAlt;
 
         //check for non numerical input
         //and less/more input than needed
@@ -62,6 +61,15 @@ public:
             pathCount = 0;
             break;
           }
+
+        buffer >> pathCount >> pathLon >> pathLat >> pathAlt;
+        geometry_msgs::Pose tmpPose;
+        //FIXME: How do I convert long, lat, alt to cartesian coordinate?
+        tmpPose.position.x = pathLat * 88000;
+        tmpPose.position.y = pathLon * 110000;
+        tmpPose.position.z = pathAlt;
+
+        path.poses.push_back(tmpPose);
 
         //do what you want with temp1 and temp2
         ROS_DEBUG_STREAM("[" << pathCount << "] longitude: " << pathLon << '\t' << "latitude : " << pathLat );
